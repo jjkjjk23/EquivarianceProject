@@ -1,6 +1,6 @@
 from TrainerBuilder import TrainBuilder, TrainerConfig
 from DataBuilder import DataBuilder, DataConfig
-from modelBuilder import ModelConfig, ModelBuilder
+from ModelBuilder import ModelConfig, ModelBuilder
 from TrainerClass import Trainer
 
 import torch

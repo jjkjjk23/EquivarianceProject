@@ -6,7 +6,7 @@ from equivariance_regularizer import EquivarianceRegularizer
 from pathlib import Path
 from TrainerBuilder import TrainBuilder, TrainerConfig
 from DataBuilder import DataBuilder, DataConfig
-from modelBuilder import ModelConfig, ModelBuilder
+from ModelBuilder import ModelConfig, ModelBuilder
 from tqdm import tqdm
 
 import wandb
