@@ -6,19 +6,31 @@ from TrainerClass import Trainer
 import torch
 import torch.nn as nn
 
-args = dict({
-        'debugging' : False,
+commonArgs = dict({
         'dataset' : 'Oxford',
         'task' : 'category',
-        'amp' : False,
-        'batchSize' : 20,
+        'batchSize' : 1,
+
     })
 
+args = dict(commonArgs, **{
+        'debugging' : False,
+        'amp' : True,
+        'debugTest' : False,
+        'device' : torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+    })
 
+dataArgs = dict(commonArgs, **{
+        'split' : 'trainval', 
+    })
+
+testDataArgs = dict(commonArgs, **{
+        'split' : 'test',
+    })
 
 trainConfig = TrainerConfig(**args)
-dataConfig = DataConfig(dataset = 'Oxford', task = 'category')
-testConfig = DataConfig(dataset = 'Oxford', task = 'category', split = 'test')
+dataConfig = DataConfig(**dataArgs)
+testConfig = DataConfig(**testDataArgs)
 
 modelConfig = ModelConfig()
 

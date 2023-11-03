@@ -66,13 +66,13 @@ class Trainer(TrainBuilder):
         else:
             return self.stdWandb()
 
-    def debugTest(self, global_step):
+    def debugTest(self):
         if self.trainConfig.debugTest:
-            self.endTest(global_step)
+            self.endTest()
         return
 
     def train(self):
-        global_step = 0
+        self.global_step = 0
         eps=1e-8
         time0=time.time()
         epoch = 0
@@ -80,16 +80,16 @@ class Trainer(TrainBuilder):
         self.configOptimizer()
         self.logInit()
         self.wandbInit()
-        self.debugTest(global_step)
+        self.debugTest()
         for epoch in range(1, self.trainConfig.epochs+1):
             if self.trainConfig.eqweight_scheduler:
                 self.eqweightStep()
             self.model.train()
-            self.epochTrain(epoch, time0, global_step)
+            self.epochTrain(epoch, time0)
             self.checkpoint()
-            self.endTest(global_step)
+            self.endTest()
 
-    def epochTrain(self, epoch, time0, global_step):
+    def epochTrain(self, epoch, time0):
 
         with tqdm(
                 total=len(self.train_loader),
@@ -99,13 +99,14 @@ class Trainer(TrainBuilder):
             epochStep = 0
             epochTime = time.time()
             for batch in self.train_loader:
-                images, true_masks = batch
                 with torch.autocast(self.trainConfig.device.type if self.trainConfig.device.type != 'mps' else 'cpu', enabled=self.trainConfig.amp):
+                    images, true_masks = batch
                     self.model.to(dtype = images.dtype, device = images.device)
                     masks_pred = self.model(images)
                     if not self.trainConfig.debugging:
-                        self.basicTrainLog(epochTime, time0, global_step, epoch)
-                        self.logImages(global_step, images, true_masks, masks_pred)
+                        self.basicTrainLog(epochTime, time0,epoch)
+                        if self.global_step % (len(self.train_loader)//4) ==0:
+                            self.logImages(images, true_masks, masks_pred)
                     del images
                     loss = self.loss(true_masks, masks_pred)
                 self.step(loss)
@@ -116,6 +117,8 @@ class Trainer(TrainBuilder):
                 del true_masks
                 del masks_pred
                 self.equivarianceStep()
+                epochStep+=1
+                self.global_step+=1
         return
     #Move this into configData
     def processImages(self, images, true_masks):
@@ -130,12 +133,11 @@ class Trainer(TrainBuilder):
             self.heLaProcessing(images, true_masks)
             return
 
-    def logImages(self,global_step, images, true_masks, masks_pred):
-        if global_step % (len(self.train_loader)//5)==0:
-            if self.trainConfig.task == 'category':
-                self.labelledImageLog(images, true_masks, masks_pred)
-            elif self.trainConfig.task == 'segmentation':
-                self.basicImageLog(images, true_masks, masks_pred)
+    def logImages(self, images, true_masks, masks_pred):
+        if self.trainConfig.task == 'category':
+            self.labelledImageLog(images, true_masks, masks_pred)
+        elif self.trainConfig.task == 'segmentation':
+            self.basicImageLog(images, true_masks, masks_pred)
         return
 
     def loss(self, true_masks, masks_pred):
@@ -182,7 +184,7 @@ class Trainer(TrainBuilder):
             
         return
 
-    def endTest(self, global_step):
+    def endTest(self):
         equivarianceError = 0
         testLoss = 0
         accuracy = 0
@@ -198,8 +200,9 @@ class Trainer(TrainBuilder):
                     images, true_masks = batch
                     self.model.to(dtype = images.dtype, device = images.device)
                     masks_pred = self.model(images)
-
-                    self.logImages(global_step, images, true_masks, masks_pred)
+            
+                    if step % len(self.testLoader)//5 == 0:
+                        self.logImages( images, true_masks, masks_pred)
                     del images
 
                     testLoss += float(self.loss(true_masks, masks_pred))
@@ -214,17 +217,22 @@ class Trainer(TrainBuilder):
 
                     equivarianceError += float(self.equivarianceFunction())
                     step+=1
-                    global_step+=1
+                    self.global_step+=1
                     pbar.update()
-
+        dice = [i//step for i in dice]
+        accuracy = accuracy//step
+        testLoss = testLoss//step
         self.experiment.log({
             'Test Equivariance Error' : equivarianceError,
+            'Test Loss' : testLoss,
             })
+
         if self.trainConfig.task == 'segmentation':
-            self.experiment.log({'Test Dice' : dice})
+            self.experiment.log({f'Test Dice {i}' : dice[i] for i in range(len(dice))})
 
         if self.trainConfig.task == 'category':
             self.experiment.log({'Test Accuracy' : accuracy})
+
         self.model.train()
 
         return

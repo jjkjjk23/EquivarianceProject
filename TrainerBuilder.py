@@ -4,12 +4,6 @@ from etrainerfunctions import dicescore
 from equivariance_regularizer import EquivarianceRegularizer
 import wandb
 #TODO: TestConfig
-class ModelConfig:
-    #backBone = 'DINO' or 'UNet'
-    def __init__(
-            self,
-            backBone = 'DINO'):
-        return
 
 class TrainerConfig:
     def __init__(self,
@@ -92,6 +86,8 @@ class TrainBuilder:
         self.train_loader = train_loader
         self.testLoader = testLoader
 
+        self.global_step = 0
+
     def debugWandb(self):
         print('This is running in debugging mode and is not logging with wandb')
         return
@@ -146,11 +142,11 @@ class TrainBuilder:
             })
 
 
-    def basicTrainLog(self, epochTime, time0, global_step, epoch):
+    def basicTrainLog(self, epochTime, time0, epoch):
         if not self.trainConfig.debugging:
             self.experiment.log({
                 'learning rate': self.optimizer.param_groups[0]['lr'],
-                'step': global_step,
+                'step': self.global_step,
                 'epoch': epoch,
                 'Time into epoch': time.time()-epochTime,
                 'Total time' : time.time()-time0,
@@ -193,7 +189,7 @@ class TrainBuilder:
         return
 
     def logDice(self, true_masks, masks_pred):
-        self.experiment.log({'Training Dice' : self.calcDice()})
+        self.experiment.log({'Training Dice' : self.calcDice(true_masks, masks_pred)})
         return
     def calcDice(self, true_masks, masks_pred):
         dice = [float(j) for j in dicescore(masks_pred,
@@ -206,7 +202,7 @@ class TrainBuilder:
         return dice
 
     def logAccuracy(self, true_masks, masks_pred):
-        self.experiment.log({'Accuracy' : self.calcAccuracy()})
+        self.experiment.log({'Accuracy' : self.calcAccuracy(true_masks, masks_pred)})
         return
     
     def calcAccuracy(self, true_masks, masks_pred):

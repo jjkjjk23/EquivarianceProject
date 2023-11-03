@@ -3,7 +3,7 @@ import torchvision
 import numpy as np
 import PIL
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 
 
 class HeLaDataset(torch.utils.data.Dataset):
@@ -174,6 +174,21 @@ class DataBuilder:
                               shuffle = False,
                               batch_size = self.dataConfig.batchSize
                               )
+
+    def valSplitDataLoader(self, dataset):
+        n_val = 200
+        n_train = len(dataset) - n_val
+        train_set, _ = random_split(
+                dataset,
+                [n_train, n_val],
+                generator=torch.Generator().manual_seed(0)
+                )
+        train_loader = DataLoader(
+                train_set,
+                shuffle=True,
+                batch_size=self.dataConfig.batchSize
+                )
+        return train_loader
 
 """dataConfig = DataConfig()
 dataBuilder = DataBuilder(dataConfig)
