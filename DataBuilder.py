@@ -163,7 +163,11 @@ class DataBuilder:
 
     def configDataLoader(self, dataset):
         if self.split == 'trainval' and self.dataConfig.dataset=='Oxford':
-            return self.valSplitDataLoader(dataset)
+            #            return self.valSplitDataLoader(dataset)
+            return DataLoader(dataset,
+                              shuffle = True,
+                              batch_size = self.dataConfig.batchSize
+                              )
         if self.split == 'trainval' or self.split == 'train':
             return DataLoader(dataset,
                               shuffle = True,
