@@ -16,6 +16,7 @@ from tqdm import tqdm
 import numpy as np
 import time
 import math
+import functools
 
 import wandb
 
@@ -159,21 +160,22 @@ class RandomDataset(torch.utils.data.Dataset):
         self.dataset=dataset
     def __getitem__(self, idx):
         image, true_mask = self.dataset.__getitem__(idx)
-        transform_or_not = random.randint(0,1)
+        #transform_or_not = random.randint(0,1)
         #if transform_or_not == 0:
             #return image, true_mask
-        stacked = torch.stack((image, true_mask), dim=0)
+#        stacked = torch.stack((image, true_mask), dim=0)
         angle=random.uniform(-10,10)
         shiftnum = random.randint(-6,6)
         axis = random.randint(-2,-1)
         
-        functions = [shifty(shiftnum, axis), rotate(angle), torchvision.transforms.ElasticTransform(interpolation=TF.InterpolationMode.NEAREST),rotate(90)]
+        functions = [shifty(shiftnum, axis), rotate(angle), torchvision.transforms.ElasticTransform(interpolation=TF.InterpolationMode.NEAREST)]
             
         randcombo = functools.reduce(compose, functions)
-        stacked=randcombo(stacked)
+#        stacked=randcombo(stacked)
+        image = randcombo(image)
         
-        image=stacked[0]
-        true_mask=stacked[1]
+        #image=stacked[0]
+        #true_mask=stacked[1]
         return image, true_mask
     def __len__(self):
         return len(self.dataset)

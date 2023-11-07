@@ -1,38 +1,42 @@
 import torch
 import time
 from etrainerfunctions import dicescore
-from equivariance_regularizer import EquivarianceRegularizer
+from equivariance_regularizer_test import EquivarianceRegularizer
 import wandb
 #TODO: TestConfig
 
 class TrainerConfig:
-    def __init__(self,
-             debugging = False,
-             etransforms = None,
-             equivariant = False,
-             eqweight = None,
-             n = 0,
-             class_weights = None,
-             save_checkpoint = False,
-             min_lr = 0,
-             max_lr = .01,
-             wandb_project = None,
-             eqweight_scheduler = False,
-             task = 'category',
-             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-             epochs = 1,
-             amp = True,
-             batchSize = 1,
-             num_classes = 1,
-             gradient_clipping = 1.0,
-             dataset = 'HeLa',
-             scheduler = None,
-             optimizer = 'SGD',
-             gradientScaling = False,
-             learning_rate = .1,
-             debugTest = True,
-            
-             ):
+    def __init__(
+            self,
+            debugging = False,
+            etransforms = None,
+            equivariant = False,
+            eqweight = None,
+            n = 0,
+            class_weights = None,
+            save_checkpoint = False,
+            min_lr = 0,
+            max_lr = .01,
+            wandb_project = None,
+            eqweight_scheduler = False,
+            task = 'category',
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+            epochs = 1,
+            amp = True,
+            batchSize = 1,
+            num_classes = 1,
+            gradient_clipping = 1.0,
+            dataset = 'HeLa',
+            scheduler = None,
+            optimizer = 'SGD',
+            gradientScaling = False,
+            learning_rate = .1,
+            debugTest = True,
+            in_shape = (3,224,224),
+            loss = 'myLoss',
+            endTest = False,
+            **kwargs,
+            ):
         self.debugging = debugging
         self.etransforms = etransforms
         self.equivariant = equivariant
@@ -57,6 +61,9 @@ class TrainerConfig:
         self.gradientScaling = gradientScaling
         self.learning_rate = learning_rate
         self.debugTest = debugTest
+        self.in_shape = (3,224,224)
+        self.loss = loss
+        self.endTest = endTest
             
 class TrainBuilder:
     def __init__(
@@ -75,10 +82,6 @@ class TrainBuilder:
         self.criterion = None
         self.trainConfig = trainConfig
         self.eqweight = trainConfig.eqweight
-        if self.trainConfig.dataset == 'Oxford':
-            self.trainConfig.in_shape = (3, 224,224)
-        elif self.trainConfig.dataset == 'HeLa':
-            self.trainConfig.in_shape = (1, 512,512)
         self.model = model
         self.modelConfig = modelConfig
         self.dataConfig = dataConfig
@@ -94,7 +97,6 @@ class TrainBuilder:
     def stdWandb(self):
         self.experiment = wandb.init(project=self.trainConfig.wandb_project, resume='allow', anonymous='must')
         #min and max lr?
-        print("My Experiment is ", self.experiment)
         self.experiment.config.update(
             dict(epochs=self.trainConfig.epochs,
                  batchSize=self.trainConfig.batchSize,
@@ -208,8 +210,8 @@ class TrainBuilder:
     def calcAccuracy(self, true_masks, masks_pred):
         accuracy = float(torch.mean(
                             torch.eq(
-                                torch.argmax(masks_pred, axis=-1),
-                                torch.argmax(true_masks, axis=-1)
+                                torch.argmax(masks_pred, -1),
+                                torch.argmax(true_masks, -1)
                             ).to(dtype=torch.float)
                         ))
         return accuracy

@@ -4,6 +4,7 @@ import numpy as np
 import PIL
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
+from etrainerfunctions import RandomDataset, CombinedDataset
 
 
 class HeLaDataset(torch.utils.data.Dataset):
@@ -15,6 +16,7 @@ class HeLaDataset(torch.utils.data.Dataset):
                  target_transform=None,
                  device = torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
                  num_classes = 1,
+                 
                  ):
         super().__init__()
         self.images=PIL.Image.open(train_file)
@@ -67,7 +69,7 @@ class DataConfig:
              augmented = False,
              afunctions = None,
              task = 'category',
-             backBone = 'DINO', #Equals 'DINO' or 'UNet' so far
+             backBone = 'DINO', #Equals 'DINO', 'ViT', or 'UNet' so far
              split = 'test', #'test' or 'trainval'
              device = torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
              batchSize = 1,
@@ -103,14 +105,22 @@ class DataBuilder:
     def oxfordInput(self, image):
         totensor = torchvision.transforms.PILToTensor()
         resize = torchvision.transforms.Resize((224,224))
+        if self.dataConfig.backBone == 'DINO':
+            resize = torchvision.transforms.Resize((518, 518))
         dinoNorm = torchvision.transforms.Normalize(mean = (0.485, 0.456, 0.406),
                                                     std = (0.229, 0.224, 0.225)
                                                     )
+        ViTNorm = torchvision.transforms.Normalize(mean = (.5, .5, .5),
+                                                    std = (.5, .5, .5)
+                                                    )
+
         image = totensor(image)
         image = resize(image)
         image = image.to(dtype = torch.float32, device = self.dataConfig.device)
         if self.dataConfig.backBone == 'DINO':
             image = dinoNorm(image)
+        if self.dataConfig.backBone == 'ViT':
+            image = ViTNorm(image)
         return image
     #Implement HeLa
     def outputTransform(self, image):
@@ -159,6 +169,9 @@ class DataBuilder:
     def augmentDatasets(self, dataset0):
         if self.dataConfig.augmented==False:
             return dataset0
+        if self.dataConfig.augmented == 'randcombo':
+            return RandomDataset(dataset0)
+
         return dataset0
 
     def configDataLoader(self, dataset):

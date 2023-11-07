@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import time
 import logging
-from equivariance_regularizer import EquivarianceRegularizer
+from equivariance_regularizer_test import EquivarianceRegularizer
 from pathlib import Path
 from TrainerBuilder import TrainBuilder, TrainerConfig
 from DataBuilder import DataBuilder, DataConfig
@@ -25,7 +25,12 @@ class Trainer(TrainBuilder):
             self.cyclicConfig()
         if self.trainConfig.gradientScaling:
             self.grad_scaler = torch.cuda.amp.GradScaler(enabled=self.trainConfig.amp)
-        self.criterion = nn.CrossEntropyLoss() if self.trainConfig.num_classes > 1 else nn.BCEWithLogitsLoss()
+        if self.trainConfig.loss == 'CrossEntropy':
+            self.criterion = nn.CrossEntropyLoss() if self.trainConfig.num_classes > 1 else nn.BCEWithLogitsLoss()
+        elif self.trainConfig.loss == 'BCE':
+            self.criterion = nn.BCEWithLogitsLoss()
+        elif self.trainConfig.loss == 'myLoss':
+            self.criterion = self.myLoss
         self.equivarianceFunction = self.configEquivariance()
         self.configOptimizer()
         return
@@ -87,7 +92,8 @@ class Trainer(TrainBuilder):
             self.model.train()
             self.epochTrain(epoch, time0)
             self.checkpoint()
-            self.endTest()
+            if self.trainConfig.endTest:
+                self.endTest()
 
     def epochTrain(self, epoch, time0):
 
@@ -99,26 +105,30 @@ class Trainer(TrainBuilder):
             epochStep = 0
             epochTime = time.time()
             for batch in self.train_loader:
-                with torch.autocast(self.trainConfig.device.type if self.trainConfig.device.type != 'mps' else 'cpu', enabled=self.trainConfig.amp):
+                with torch.autocast(
+                        self.trainConfig.device.type,
+                        enabled=self.trainConfig.amp):
                     images, true_masks = batch
                     self.model.to(dtype = images.dtype, device = images.device)
                     masks_pred = self.model(images)
                     if not self.trainConfig.debugging:
                         self.basicTrainLog(epochTime, time0,epoch)
                         if self.global_step % (len(self.train_loader)//4) ==0:
-                            self.logImages(images, true_masks, masks_pred)
+                            self.logImages(images, masks_pred, true_masks)
                     del images
-                    loss = self.loss(true_masks, masks_pred)
+                    loss = self.loss(masks_pred, true_masks)
                 self.step(loss)
                 pbar.update()
                 if not self.trainConfig.debugging:
-                    self.lossLog(loss, true_masks, masks_pred,pbar)
+                    self.lossLog(loss, masks_pred, true_masks,pbar)
                 del loss
                 del true_masks
                 del masks_pred
                 self.equivarianceStep()
                 epochStep+=1
                 self.global_step+=1
+#                if self.global_step>=200:
+#                    break
         return
     #Move this into configData
     def processImages(self, images, true_masks):
@@ -133,18 +143,23 @@ class Trainer(TrainBuilder):
             self.heLaProcessing(images, true_masks)
             return
 
-    def logImages(self, images, true_masks, masks_pred):
+    def logImages(self, images, masks_pred, true_masks):
         if self.trainConfig.task == 'category':
-            self.labelledImageLog(images, true_masks, masks_pred)
+            self.labelledImageLog(images, masks_pred, true_masks)
         elif self.trainConfig.task == 'segmentation':
-            self.basicImageLog(images, true_masks, masks_pred)
+            self.basicImageLog(images, masks_pred, true_masks)
         return
 
-    def loss(self, true_masks, masks_pred):
+    def loss(self, masks_pred, true_masks):
         loss = self.criterion(masks_pred, true_masks)
         if self.trainConfig.task=='segmentation':
             loss+=self.diceLoss(masks_pred, true_masks)
         return loss
+
+    def myLoss(self, masks_pred, true_masks):
+        masks_pred = -nn.functional.log_softmax(masks_pred, dim = -1)
+        masks_pred, _ = torch.max(masks_pred*true_masks, dim = -1)
+        return torch.mean(masks_pred)
 
     def accuracy(self):
         return
@@ -165,11 +180,11 @@ class Trainer(TrainBuilder):
         return
 
 
-    def lossLog(self, loss,true_masks,masks_pred, pbar):
+    def lossLog(self, loss,masks_pred, true_masks, pbar):
         if self.trainConfig.task=='segmentation':
-            self.logDice(true_masks, masks_pred)
+            self.logDice(masks_pred, true_masks)
         if self.trainConfig.task == 'category':
-            self.logAccuracy(true_masks, masks_pred)
+            self.logAccuracy(masks_pred, true_masks)
         self.experiment.log({'Loss' : loss})
         pbar.set_postfix(**{'Loss' : loss.item()}) 
         return
@@ -202,26 +217,26 @@ class Trainer(TrainBuilder):
                     masks_pred = self.model(images)
             
                     if step % len(self.testLoader)//5 == 0:
-                        self.logImages( images, true_masks, masks_pred)
+                        self.logImages( images, masks_pred, true_masks)
                     del images
 
-                    testLoss += float(self.loss(true_masks, masks_pred))
+                    testLoss += float(self.loss(masks_pred, true_masks))
                     if self.trainConfig.task == 'segmentation':
                         for i in range(len(dice)):
-                            dice[i]+=self.calcDice(true_masks, masks_pred)
+                            dice[i]+=self.calcDice(masks_pred, true_masks)
                     elif self.trainConfig.task == 'category':
-                        accuracy += self.calcAccuracy(true_masks, masks_pred)
-
+                        accuracy += self.calcAccuracy(masks_pred, true_masks)
                     del true_masks
                     del masks_pred
-
                     equivarianceError += float(self.equivarianceFunction())
                     step+=1
                     self.global_step+=1
                     pbar.update()
-        dice = [i//step for i in dice]
-        accuracy = accuracy//step
-        testLoss = testLoss//step
+                    pbar.set_postfix({'Test Accuracy' : accuracy/step})
+        dice = [i/step for i in dice]
+        accuracy = accuracy/step
+        testLoss = testLoss/step
+        equivarianceError = equivarianceError/step
         self.experiment.log({
             'Test Equivariance Error' : equivarianceError,
             'Test Loss' : testLoss,
