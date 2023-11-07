@@ -4,6 +4,7 @@ import numpy as np
 import timm
 from dinov2.layers import DINOHead, NestedTensorBlock as Block
 from dinov2.models.vision_transformer import DinoVisionTransformer, vit_base, vit_large
+from unet import UNet
 
 class Transformer(nn.Module):
     def __init__(self, modelConfig, backbone_model, head):
@@ -33,6 +34,7 @@ class ModelConfig:
             backBone = 'DINO',
             head = 'DINO', #or 'custom'
             task = 'category',
+            num_channels = 3,
             **kwargs
             ):
         self.device = device
@@ -43,6 +45,7 @@ class ModelConfig:
         self.backBone = backBone
         self.head = head
         self.task = task
+        self.num_channels = num_channels
         
         
 class ModelBuilder:
@@ -52,6 +55,8 @@ class ModelBuilder:
         return
 
     def build(self):
+        if self.modelConfig.backBone == 'UNet':
+            return self.buildBackbone()
         return Transformer(
                 self.modelConfig,
                 self.buildBackbone(),
@@ -64,6 +69,11 @@ class ModelBuilder:
             return self.buildDINOv2()
         elif self.modelConfig.backBone == 'ViT':
             return self.buildViT()
+        elif self.modelConfig.backBone == 'UNet':
+            return UNet(
+                    self.modelConfig.num_channels,
+                    self.modelConfig.num_classes
+                    )
         return
 
     def buildDINO(self):
@@ -118,5 +128,7 @@ class ModelBuilder:
                     out_dim = 37,
                     hidden_dim = 512
                             ) 
+        elif self.modelConfig.backBone == 'UNet':
+            return lambda x: x
         
     

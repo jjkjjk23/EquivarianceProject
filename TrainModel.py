@@ -15,9 +15,9 @@ def identity(x):
 
 commonArgs = dict({
         'dataset' : 'Oxford',
-        'task' : 'category',
+        'task' : 'segmentation',
         'batchSize' : 10,
-        'backBone' : 'DINO',
+        'backBone' : 'UNet',
     })
 
 args = dict(commonArgs, **{
@@ -26,18 +26,19 @@ args = dict(commonArgs, **{
         'debugTest' : False,
         'device' : torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         'epochs' : 20,
-        'etransforms' : [[identity, rotate, 0,.20]], 
-        'equivariant' : False,
+        'etransforms' : [[rotate, 0,.20]], 
+        'equivariant' : True,
         'in_shape' : (3,224,224),
         'n' : 10,
         'learning_rate' : .1,
-        'loss' : 'myLoss',
-        'endTest' : False
+        'loss' : 'CrossEntropy',
+        'endTest' : True
     })
 
 dataArgs = dict(commonArgs, **{
         'split' : 'trainval', 
         'augmented' : False,
+        'num_classes' : 3,
     })
 
 testDataArgs = dict(commonArgs, **{
@@ -45,9 +46,11 @@ testDataArgs = dict(commonArgs, **{
     })
 modelArgs = dict(**{
         'device' : torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-        'backBone' : 'DINOold',
+        'backBone' : 'UNet',
         'in_size' : 768,
-        'head' : 'DINO'
+        'head' : 'DINO',
+        'num_channels' : 3,
+        'num_classes' : 3,
 
     })
 

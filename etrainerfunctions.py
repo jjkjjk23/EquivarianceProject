@@ -334,16 +334,19 @@ def equivariance_error(model, eintegrand, functions, shape, bounds=None, n=50, c
         return [torch.nn.functional.relu(Linffn(realintegrand(f), shape, bounds, n=n,cuda=cuda)-f[2]) for f in functions]
 
 #Calculate dice score for one-hot encoded targets and predictions
-def dicescore(pred,target, ignore_index=None, average_classes=None, class_dim=1, num_classes=None):
+def dicescore(pred,target, ignore_index=None, average_classes=None, class_dim=1, num_classes=None, round=True):
     assert pred.shape == target.shape
     
     pred = torch.transpose(pred, class_dim, -1)
+    pred = torch.sigmoid(pred)
+    
     target = torch.transpose(target, class_dim, -1)
     if num_classes !=1:
         pred = torch.argmax(pred, dim=-1)
         pred = F.one_hot(pred,  num_classes=num_classes)
     else:
-        pred=torch.round(torch.sigmoid(pred))
+        if round:
+            pred=torch.round(pred)
     split_pred = torch.split(pred,1,dim=-1)
     split_target = torch.split(target, 1, dim=-1)
     tp = [(x*split_target[j]).sum() for j,x in enumerate(split_pred) if j!=ignore_index]

@@ -64,16 +64,18 @@ class TransformedDataset(torch.utils.data.Dataset):
         return self.inputTransform(image), self.outputTransform(target)
 
 class DataConfig:
-    def __init__(self,
-             dataset = 'Oxford',
-             augmented = False,
-             afunctions = None,
-             task = 'category',
-             backBone = 'DINO', #Equals 'DINO', 'ViT', or 'UNet' so far
-             split = 'test', #'test' or 'trainval'
-             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-             batchSize = 1,
-             ):
+    def __init__(
+            self,
+            dataset = 'Oxford',
+            augmented = False,
+            afunctions = None,
+            task = 'category',
+            backBone = 'DINO', #Equals 'DINO', 'ViT', or 'UNet' so far
+            split = 'test', #'test' or 'trainval'
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+            batchSize = 1,
+            num_classes = 3,
+            ):
         self.dataset = dataset
         self.augmented = augmented
         self.afunctions = afunctions
@@ -82,6 +84,7 @@ class DataConfig:
         self.split = split
         self.device = device
         self.batchSize = batchSize
+        self.num_classes = num_classes
 
 class DataBuilder:
     def __init__(self, dataConfig):
@@ -126,6 +129,7 @@ class DataBuilder:
     def outputTransform(self, image):
         if self.dataConfig.dataset == 'Oxford':
             if self.dataConfig.task == 'segmentation':
+                image = self.oxfordInput(image)
                 return self.oxfordSegOutput(image)
             else:
                 return self.oxfordCatOutput(image) 
@@ -137,6 +141,7 @@ class DataBuilder:
         tensor = F.one_hot(tensor, self.dataConfig.num_classes)
         tensor = tensor.permute(0, 3, 1, 2)
         tensor = tensor.to(dtype = torch.float32)
+        tensor = tensor.squeeze(0)
         return tensor
 
     def oxfordCatOutput(self,image):

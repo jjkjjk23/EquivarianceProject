@@ -125,7 +125,7 @@ class TrainBuilder:
         self.eqweight=kwargs['eqweight_decay']*self.eqweight
         return
         
-    def basicImageLog(self, images, true_masks, masks_pred):
+    def basicImageLog(self, images, masks_pred, true_masks):
         self.experiment.log({
             'Images': wandb.Image(images[0].cpu()),
             'Masks' : {
@@ -134,7 +134,7 @@ class TrainBuilder:
                 }
             })
         return
-    def labelledImageLog(self, images, true_masks, masks_pred ):
+    def labelledImageLog(self, images, masks_pred, true_masks ):
         self.experiment.log({
             'images': wandb.Image(
                             images[0].cpu(),
@@ -154,7 +154,7 @@ class TrainBuilder:
                 'Total time' : time.time()-time0,
                 })
 
-    def diceLoss(self):
+    def diceLoss(self, masks_pred, true_masks):
         return 1-dicescore(masks_pred,
                            true_masks,
                            num_classes = self.trainConfig.num_classes,
@@ -190,24 +190,23 @@ class TrainBuilder:
             self.scheduler.step()
         return
 
-    def logDice(self, true_masks, masks_pred):
-        self.experiment.log({'Training Dice' : self.calcDice(true_masks, masks_pred)})
+    def logDice(self, masks_pred, true_masks):
+        self.experiment.log({'Training Dice' : self.calcDice(masks_pred, true_masks)})
         return
-    def calcDice(self, true_masks, masks_pred):
-        dice = [float(j) for j in dicescore(masks_pred,
+    def calcDice(self, masks_pred, true_masks):
+        dice = dicescore(masks_pred,
                          true_masks,
                          num_classes = self.trainConfig.num_classes,
                          round = True,
                          average_classes = False
                         )
-               ]
         return dice
 
-    def logAccuracy(self, true_masks, masks_pred):
-        self.experiment.log({'Accuracy' : self.calcAccuracy(true_masks, masks_pred)})
+    def logAccuracy(self, masks_pred, true_masks):
+        self.experiment.log({'Accuracy' : self.calcAccuracy(masks_pred, true_masks)})
         return
     
-    def calcAccuracy(self, true_masks, masks_pred):
+    def calcAccuracy(self, masks_pred, true_masks):
         accuracy = float(torch.mean(
                             torch.eq(
                                 torch.argmax(masks_pred, -1),
