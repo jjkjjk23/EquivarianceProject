@@ -341,7 +341,7 @@ def dicescore(pred,target, ignore_index=None, average_classes=None, class_dim=1,
     pred = torch.sigmoid(pred)
     
     target = torch.transpose(target, class_dim, -1)
-    if num_classes !=1:
+    if num_classes !=1 and round:
         pred = torch.argmax(pred, dim=-1)
         pred = F.one_hot(pred,  num_classes=num_classes)
     else:
@@ -355,12 +355,14 @@ def dicescore(pred,target, ignore_index=None, average_classes=None, class_dim=1,
     scores=[2*tp[j]/(2*tp[j]+fp[j]+fn[j]) if tp[j]+fp[j]+fn[j] != 0 else 1 for j in range(len(tp))]
     if len(scores)==0:
         return 0
-    if average_classes == None:
+    if average_classes == False or average_classes == None:
         return scores
     elif average_classes == True:
         return sum(scores)/len(scores)
     elif average_classes == 'weighted':
         return sum([scores[j]*(split_target[j].sum()) for j in range(len(scores))])/target.sum()
+    else:
+        return scores
 
 #If you're using mean instead of max you might not want infinity to be 0
 def pointwise_equivariance_error(model, tensor, f, vector=False):

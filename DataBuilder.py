@@ -75,6 +75,7 @@ class DataConfig:
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
             batchSize = 1,
             num_classes = 3,
+            in_shape = (3,224,224),
             ):
         self.dataset = dataset
         self.augmented = augmented
@@ -85,6 +86,7 @@ class DataConfig:
         self.device = device
         self.batchSize = batchSize
         self.num_classes = num_classes
+        self.in_shape = in_shape
 
 class DataBuilder:
     def __init__(self, dataConfig):
@@ -107,9 +109,7 @@ class DataBuilder:
 
     def oxfordInput(self, image):
         totensor = torchvision.transforms.PILToTensor()
-        resize = torchvision.transforms.Resize((224,224))
-        if self.dataConfig.backBone == 'DINO':
-            resize = torchvision.transforms.Resize((518, 518))
+        resize = torchvision.transforms.Resize(self.dataConfig.in_shape[-2:])
         dinoNorm = torchvision.transforms.Normalize(mean = (0.485, 0.456, 0.406),
                                                     std = (0.229, 0.224, 0.225)
                                                     )
@@ -119,6 +119,7 @@ class DataBuilder:
 
         image = totensor(image)
         image = resize(image)
+        image = image/255
         image = image.to(dtype = torch.float32, device = self.dataConfig.device)
         if self.dataConfig.backBone == 'DINO':
             image = dinoNorm(image)

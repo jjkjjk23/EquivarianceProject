@@ -35,6 +35,8 @@ class TrainerConfig:
             in_shape = (3,224,224),
             loss = 'myLoss',
             endTest = False,
+            num_funcs = 1,
+            bounds = [-1,1],
             **kwargs,
             ):
         self.debugging = debugging
@@ -64,6 +66,8 @@ class TrainerConfig:
         self.in_shape = (3,224,224)
         self.loss = loss
         self.endTest = endTest
+        self.num_funcs = num_funcs
+        self.bounds = bounds
             
 class TrainBuilder:
     def __init__(
@@ -169,6 +173,8 @@ class TrainBuilder:
                 self.trainConfig.etransforms,
                 dist = 'cross_entropy_logits',
                 n = self.trainConfig.n,
+                num_funcs = self.trainConfig.num_funcs,
+                bounds = self.trainConfig.bounds,
                 )
         return lambda : 0
 

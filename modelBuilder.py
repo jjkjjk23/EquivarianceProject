@@ -66,7 +66,7 @@ class ModelBuilder:
         if self.modelConfig.backBone == 'DINOold':
             return self.buildDINO()
         elif self.modelConfig.backBone == 'DINO':
-            return self.buildDINOv2()
+            return self.buildDINO()
         elif self.modelConfig.backBone == 'ViT':
             return self.buildViT()
         elif self.modelConfig.backBone == 'UNet':
@@ -83,6 +83,10 @@ class ModelBuilder:
         "base": "vitb14",
         "large": "vitl14",
         "giant": "vitg14",
+        "small_reg": "vits14_reg4",
+        "base_reg": "vitb14_reg",
+        "large_reg": "vitl14_reg4",
+        "giant_reg": "vitg14_reg4",
         }
         backbone_arch = backbone_archs[BACKBONE_SIZE]
         backbone_name = f"dinov2_{backbone_arch}"

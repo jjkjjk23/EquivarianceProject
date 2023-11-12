@@ -7,17 +7,35 @@ import timm
 import torch
 import torch.nn as nn
 import torchvision
-
-rotate = torchvision.transforms.RandomRotation(10)
+from torchvision.transforms import v2
+import numpy as np
 
 def identity(x):
     return x
 
+rotate = torchvision.transforms.RandomRotation(10)
+horizFlip = torchvision.transforms.RandomHorizontalFlip(1)
+perspective = v2.RandomPerspective()
+color = v2.ColorJitter()
+randomResizedCrop = v2.RandomResizedCrop((518, ))
+etransforms = [
+            [identity, rotate, 0, .00005],
+            [identity, horizFlip, 0, .00005],
+            [identity, perspective, 0, .00005],
+            [identity, color, 0, .00005],
+            [identity, randomResizedCrop, 0.01, .00005]
+               ]
+
+
+
+
+
 commonArgs = dict({
         'dataset' : 'Oxford',
-        'task' : 'segmentation',
-        'batchSize' : 10,
-        'backBone' : 'UNet',
+        'task' : 'category',
+        'batchSize' : 10, 
+        'backBone' : 'DINO',
+        'in_shape' : (3, 336, 336),
     })
 
 args = dict(commonArgs, **{
@@ -25,20 +43,22 @@ args = dict(commonArgs, **{
         'amp' : False,
         'debugTest' : False,
         'device' : torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-        'epochs' : 20,
-        'etransforms' : [[rotate, 0,.20]], 
+        'epochs' : 25,
+        'etransforms' : etransforms, 
         'equivariant' : True,
-        'in_shape' : (3,224,224),
         'n' : 10,
         'learning_rate' : .1,
-        'loss' : 'CrossEntropy',
-        'endTest' : True
+        'loss' : 'myLoss',
+        'endTest' : True,
+        'wandb_project' : "EquivarianceProject",
+        'numFuncs' : 5,
+        'bounds' : [-1,1],
     })
 
 dataArgs = dict(commonArgs, **{
         'split' : 'trainval', 
         'augmented' : False,
-        'num_classes' : 3,
+        'num_classes' : 37,
     })
 
 testDataArgs = dict(commonArgs, **{
@@ -46,11 +66,12 @@ testDataArgs = dict(commonArgs, **{
     })
 modelArgs = dict(**{
         'device' : torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-        'backBone' : 'UNet',
-        'in_size' : 768,
+        'backBone' : 'DINO',
+        'in_size' : 1024,
         'head' : 'DINO',
         'num_channels' : 3,
-        'num_classes' : 3,
+        'num_classes' : 37,
+        'size' : "large",
 
     })
 
@@ -61,13 +82,13 @@ testConfig = DataConfig(**testDataArgs)
 modelConfig = ModelConfig(**modelArgs)
 
 modelBuilder = ModelBuilder(modelConfig)
-model = modelBuilder.build()
 
 dataBuilder = DataBuilder(dataConfig)
 dataLoader = dataBuilder.makeDataLoader()
 
 testDataBuilder = DataBuilder(testConfig)
 testLoader = testDataBuilder.makeDataLoader()
-
-trainer = Trainer(dataConfig, modelConfig, trainConfig, dataConfig, dataLoader, testLoader, model)
-trainer.train()   
+for _ in range(10):
+    model = modelBuilder.build()
+    trainer = Trainer(dataConfig, modelConfig, trainConfig, dataConfig, dataLoader, testLoader, model)
+    trainer.train()   

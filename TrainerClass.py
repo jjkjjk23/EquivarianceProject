@@ -176,7 +176,8 @@ class Trainer(TrainBuilder):
             equivarianceError = self.equivarianceFunction()
             self.step(equivarianceError)
             if not self.trainConfig.debugging:
-                self.experiment.log({'Equivariance error' : equivarianceError})
+                self.experiment.log(
+                    {'Equivariance error' : equivarianceError/self.trainConfig.etransforms[-1][-1]})
         return
 
 
@@ -218,17 +219,18 @@ class Trainer(TrainBuilder):
             
                     if step % len(self.testLoader)//5 == 0:
                         self.logImages( images, masks_pred, true_masks)
+                    equivarianceError += float(self.equivarianceFunction(images))
                     del images
 
                     testLoss += float(self.loss(masks_pred, true_masks))
                     if self.trainConfig.task == 'segmentation':
+                        new_dice = self.calcDice(masks_pred, true_masks)
                         for i in range(len(dice)):
-                            dice[i]+=self.calcDice(masks_pred, true_masks)
+                            dice[i]+=float(new_dice[i])
                     elif self.trainConfig.task == 'category':
                         accuracy += self.calcAccuracy(masks_pred, true_masks)
                     del true_masks
                     del masks_pred
-                    equivarianceError += float(self.equivarianceFunction())
                     step+=1
                     self.global_step+=1
                     pbar.update()
@@ -238,7 +240,7 @@ class Trainer(TrainBuilder):
         testLoss = testLoss/step
         equivarianceError = equivarianceError/step
         self.experiment.log({
-            'Test Equivariance Error' : equivarianceError,
+            'Test Equivariance Error' : equivarianceError/self.trainConfig.etransforms[-1][-1],
             'Test Loss' : testLoss,
             })
 
