@@ -17,14 +17,6 @@ rotate = torchvision.transforms.RandomRotation(10)
 horizFlip = torchvision.transforms.RandomHorizontalFlip(1)
 perspective = v2.RandomPerspective()
 color = v2.ColorJitter()
-randomResizedCrop = v2.RandomResizedCrop((518, ))
-etransforms = [
-            [identity, rotate, 0, .00005],
-            [identity, horizFlip, 0, .00005],
-            [identity, perspective, 0, .00005],
-            [identity, color, 0, .00005],
-            [identity, randomResizedCrop, 0.01, .00005]
-               ]
 
 
 
@@ -33,10 +25,20 @@ etransforms = [
 commonArgs = dict({
         'dataset' : 'Oxford',
         'task' : 'category',
-        'batchSize' : 10, 
+        'batchSize' : 5, 
         'backBone' : 'DINO',
         'in_shape' : (3, 336, 336),
     })
+
+randomResizedCrop = v2.RandomResizedCrop(commonArgs['in_shape'][1:])
+eqweight = 1
+etransforms = [
+            [identity, rotate, 0, eqweight],
+            [identity, horizFlip, 0, eqweight],
+            [identity, perspective, 0, eqweight],
+            [identity, color, 0, eqweight],
+            [identity, randomResizedCrop, 0.01, eqweight]
+               ]
 
 args = dict(commonArgs, **{
         'debugging' : False,
@@ -46,12 +48,12 @@ args = dict(commonArgs, **{
         'epochs' : 25,
         'etransforms' : etransforms, 
         'equivariant' : True,
-        'n' : 10,
-        'learning_rate' : .1,
+        'n' : 5,
+        'learning_rate' : .001,
         'loss' : 'myLoss',
         'endTest' : True,
         'wandb_project' : "EquivarianceProject",
-        'numFuncs' : 5,
+        'numFuncs' : 1,
         'bounds' : [-1,1],
     })
 
@@ -68,7 +70,7 @@ modelArgs = dict(**{
         'device' : torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         'backBone' : 'DINO',
         'in_size' : 1024,
-        'head' : 'DINO',
+        'head' : 'custom',
         'num_channels' : 3,
         'num_classes' : 37,
         'size' : "large",
