@@ -24,6 +24,8 @@ import PIL
 from torch.autograd import grad
 import numpy as np
 import random
+
+
 def gradient(tensor, model):
     param = random.choice(list(model.parameters()))
     #if tensor.is_cuda:
@@ -32,6 +34,7 @@ def gradient(tensor, model):
     #v always has shape (num_proj, shape)
     Jv = grad(tensor, param, grad_outputs=None, retain_graph=True, create_graph=True, is_grads_batched=False)[0]
     return torch.linalg.norm(Jv)
+
 
 def _random_vector(shape):
     '''

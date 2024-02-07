@@ -7,41 +7,82 @@ from pathlib import Path
 from DataBuilder import DataBuilder, DataConfig
 from ModelBuilder import ModelConfig, ModelBuilder
 from tqdm import tqdm
+from etrainerfunctions import dicescore
 
 import wandb
+
+@torch.compile
+def trainingStep(trainer, batch, epoch, epochStep, time0, pbar):
+    with torch.autocast(
+            trainer.trainConfig.device.type,
+            enabled=trainer.trainConfig.amp):
+        images, true_masks = batch
+        trainer.model.to(dtype = images.dtype, device = images.device)
+        masks_pred = trainer.model(images)
+        if not trainer.trainConfig.debugging:
+            trainer.basicTrainLog(epochTime, time0,epoch)
+            if trainer.global_step % (len(trainer.train_loader)//4) ==0:
+                trainer.logImages(images, masks_pred, true_masks)
+        del images
+        loss = trainer.loss(masks_pred, true_masks)
+    trainer.step(loss)
+    pbar.update()
+    if not trainer.trainConfig.debugging:
+        trainer.lossLog(loss, masks_pred, true_masks,pbar)
+    del loss
+    del true_masks
+    del masks_pred
+    trainer.equivarianceStep()
+    epochStep+=1
+    trainer.global_step+=1
+#                if self.global_step>=200:
+#                    break
+@torch.compile
+def epochTrain(trainer, epoch, time0):
+    with tqdm(
+            total=len(trainer.train_loader),
+            desc=f'Epoch {epoch}/{trainer.trainConfig.epochs}',
+            unit='img'
+            ) as pbar:
+        epochStep = 0
+        epochTime = time.time()
+        for batch in trainer.train_loader:
+            trainingStep(trainer, batch, epoch, epochStep, time0, pbar)
+    return
+
 
 class TrainerConfig:
     def __init__(
             self,
-            debugging = False,
-            etransforms = None,
-            equivariant = False,
-            eqweight = None,
-            n = 0,
-            class_weights = None,
-            save_checkpoint = False,
-            min_lr = 0,
-            max_lr = .01,
-            wandb_project = None,
-            eqweight_scheduler = False,
-            task = 'category',
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-            epochs = 1,
-            amp = True,
-            batchSize = 1,
-            num_classes = 1,
-            gradient_clipping = 1.0,
-            dataset = 'HeLa',
-            scheduler = None,
-            optimizer = 'SGD',
-            gradientScaling = False,
-            learning_rate = .1,
-            debugTest = True,
-            in_shape = (3,224,224),
-            loss = 'myLoss',
-            endTest = False,
-            num_funcs = 1,
-            bounds = [-1,1],
+            debugging=False,
+            etransforms=None,
+            equivariant=False,
+            eqweight=None,
+            n=0,
+            class_weights=None,
+            save_checkpoint=False,
+            min_lr=0,
+            max_lr=.01,
+            wandb_project=None,
+            eqweight_scheduler=False,
+            task='category',
+            device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+            epochs=1,
+            amp=True,
+            batchSize=1,
+            num_classes=1,
+            gradient_clipping=1.0,
+            dataset='HeLa',
+            scheduler=None,
+            optimizer='SGD',
+            gradientScaling=False,
+            learning_rate=.1,
+            debugTest=True,
+            in_shape=(3,224,224),
+            loss='myLoss',
+            endTest=False,
+            num_funcs=1,
+            bounds=[-1,1],
             **kwargs,
             ):
         self.debugging = debugging
@@ -68,7 +109,7 @@ class TrainerConfig:
         self.gradientScaling = gradientScaling
         self.learning_rate = learning_rate
         self.debugTest = debugTest
-        self.in_shape = (3,224,224)
+        self.in_shape = in_shape
         self.loss = loss
         self.endTest = endTest
         self.num_funcs = num_funcs
@@ -173,8 +214,8 @@ class Trainer():
             if self.trainConfig.eqweight_scheduler:
                 self.eqweightStep()
             self.model.train()
-            self.epochTrain(epoch, time0)
-            self.checkpoint()
+            epochTrain(self, epoch, time0)
+            self.checkpoint(epoch)
             if self.trainConfig.endTest:
                 self.endTest()
 
@@ -188,30 +229,7 @@ class Trainer():
             epochStep = 0
             epochTime = time.time()
             for batch in self.train_loader:
-                with torch.autocast(
-                        self.trainConfig.device.type,
-                        enabled=self.trainConfig.amp):
-                    images, true_masks = batch
-                    self.model.to(dtype = images.dtype, device = images.device)
-                    masks_pred = self.model(images)
-                    if not self.trainConfig.debugging:
-                        self.basicTrainLog(epochTime, time0,epoch)
-                        if self.global_step % (len(self.train_loader)//4) ==0:
-                            self.logImages(images, masks_pred, true_masks)
-                    del images
-                    loss = self.loss(masks_pred, true_masks)
-                self.step(loss)
-                pbar.update()
-                if not self.trainConfig.debugging:
-                    self.lossLog(loss, masks_pred, true_masks,pbar)
-                del loss
-                del true_masks
-                del masks_pred
-                self.equivarianceStep()
-                epochStep+=1
-                self.global_step+=1
-#                if self.global_step>=200:
-#                    break
+                trainingStep(self, batch, epoch, epochStep, time0, pbar)
         return
     #Move this into configData
     def processImages(self, images, true_masks):
@@ -273,14 +291,13 @@ class Trainer():
         pbar.set_postfix(**{'Loss' : loss.item()}) 
         return
 
-    def checkpoint(self):
+    def checkpoint(self, epoch):
         if self.trainConfig.save_checkpoint and not self.trainConfig.debugging:
-            dir_checkpoint = Path(f'../checkpoints/{str(experiment.name)}/')
+            dir_checkpoint = Path(f'../checkpoints/{str(self.experiment.name)}/')
             Path(dir_checkpoint).mkdir(parents=True, exist_ok=True)
             state_dict = self.model.state_dict()
             torch.save(state_dict, str(dir_checkpoint / 'checkpoint_epoch{}.pth'.format(epoch)))
             logging.info(f'Checkpoint {epoch} saved!')
-            
         return
 
     def endTest(self):
@@ -299,7 +316,7 @@ class Trainer():
                     images, true_masks = batch
                     self.model.to(dtype = images.dtype, device = images.device)
                     masks_pred = self.model(images)
-            
+
                     if step % len(self.testLoader)//5 == 0:
                         self.logImages( images, masks_pred, true_masks)
                     equivarianceError += float(self.equivarianceFunction(images))

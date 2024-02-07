@@ -5,6 +5,8 @@ import timm
 from dinov2.layers import DINOHead, NestedTensorBlock as Block
 from dinov2.models.vision_transformer import DinoVisionTransformer, vit_base, vit_large
 from unet import UNet
+from transformers import ASTFeatureExtractor, ASTModel, ASTConfig
+
 
 class Transformer(nn.Module):
     def __init__(self, modelConfig, backbone_model, head):
@@ -74,6 +76,10 @@ class ModelBuilder:
                     self.modelConfig.num_channels,
                     self.modelConfig.num_classes
                     )
+        elif self.modelConfig.backBone == 'AST':
+            #myASTConfig = ASTConfig()
+            model = ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
+            return model
         return
 
     def buildDINO(self):
@@ -134,5 +140,5 @@ class ModelBuilder:
                             ) 
         elif self.modelConfig.backBone == 'UNet':
             return lambda x: x
-        
-    
+        else:
+            return lambda x: x

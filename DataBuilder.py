@@ -5,6 +5,50 @@ import PIL
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
 from etrainerfunctions import RandomDataset, CombinedDataset
+from transformers import ASTFeatureExtractor
+from scipy.io import wavfile
+import torch._dynamo
+torch._dynamo.config.suppress_errors=True
+
+"""
+class MusicDataset(torch.utils.data.Dataset):
+    def __init__(self,
+                 trainDirectory,
+                 labelDirectory,
+                 device=torch.device(
+                     'cuda' if torch.cuda.is_available()
+                            else 'cpu'
+                 ),
+                 numClasses=88
+                 ):
+        super().__init__()
+        self.wav, self.fs = wavfile.read(trainFile)
+        self.featureExtractor
+        self.spectrograms = 
+    
+
+    def __getitem__(self,idx):
+"""
+@torch.compile
+def oxfordInputTransform(image_not_tensor, dataConfig, device):
+    totensor = torch.compile(torchvision.transforms.PILToTensor())
+    resize = torchvision.transforms.Resize(dataConfig.in_shape[-2:], antialias=True)
+    dinoNorm = torchvision.transforms.Normalize(mean = (0.485, 0.456, 0.406),
+                                                std = (0.229, 0.224, 0.225)
+                                                )
+    ViTNorm = torchvision.transforms.Normalize(mean = (.5, .5, .5),
+                                                std = (.5, .5, .5)
+                                                )
+
+    image = totensor(image_not_tensor)
+    image = resize(image)
+    image = image/255
+    image = image.to(dtype = torch.float32, device = device)
+    if dataConfig.backBone == 'DINO':
+        image = dinoNorm(image)
+    if dataConfig.backBone == 'ViT':
+        image = ViTNorm(image)
+    return image
 
 
 class HeLaDataset(torch.utils.data.Dataset):
@@ -28,6 +72,7 @@ class HeLaDataset(torch.utils.data.Dataset):
         self.transform=transform
         self.target_transform=target_transform
         
+    @torch.compile
     def __getitem__(self, idx):
         self.images.seek(idx)
         self.labels.seek(idx)
@@ -59,6 +104,7 @@ class TransformedDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.dataset)
 
+    @torch.compile
     def __getitem__(self, idx):
         image, target = dataset[idx]
         return self.inputTransform(image), self.outputTransform(target)
@@ -104,12 +150,17 @@ class DataBuilder:
         if self.dataConfig.dataset == 'HeLa':
             return self.HeLaInput(image)
         if self.dataConfig.dataset == 'Oxford':
-                return self.oxfordInput(image)
+            return oxfordInputTransform(image, self.dataConfig, self.dataConfig.device)
+        if self.dataConfig.dataset == 'Music':
+            return self.musicInput(image)
         return
+
+    def musicInput(self, image):
+        wav, fs = wavfile.read
 
     def oxfordInput(self, image):
         totensor = torchvision.transforms.PILToTensor()
-        resize = torchvision.transforms.Resize(self.dataConfig.in_shape[-2:])
+        resize = torchvision.transforms.Resize(self.dataConfig.in_shape[-2:], antialias=True)
         dinoNorm = torchvision.transforms.Normalize(mean = (0.485, 0.456, 0.406),
                                                     std = (0.229, 0.224, 0.225)
                                                     )
@@ -130,13 +181,18 @@ class DataBuilder:
     def outputTransform(self, image):
         if self.dataConfig.dataset == 'Oxford':
             if self.dataConfig.task == 'segmentation':
-                image = self.oxfordInput(image)
                 return self.oxfordSegOutput(image)
             else:
-                return self.oxfordCatOutput(image) 
+                return self.oxfordCatOutput(image)
         return image
 
     def oxfordSegOutput(self, tensor):
+        totensor = torch.compile(torchvision.transforms.PILToTensor())
+        resize = torchvision.transforms.Resize(self.dataConfig.in_shape[-2:], antialias=True)
+        tensor = totensor(tensor)
+        tensor = resize(tensor)
+        tensor = tensor.to(dtype = torch.float32, device = self.dataConfig.device)
+
         tensor = tensor.squeeze(1)-1
         tensor = tensor.to(torch.int64)
         tensor = F.one_hot(tensor, self.dataConfig.num_classes)
